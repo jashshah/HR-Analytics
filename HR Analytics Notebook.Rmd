@@ -1,0 +1,216 @@
+---
+title: "HR Analytics"
+output: html_notebook
+---
+
+```{r load libraries and helper functions}
+source('helper.R')
+source('libraries.R')
+```
+
+## Load the data.
+
+```{r load the data}
+mydata <- read_excel('data/HR Data.xlsx', na = "NA") %>%
+  mutate(DOL = as.factor(if_else(DOL == "No", "0", 
+                                 if_else(DOL == "Yes", "1", DOL)))) %>%
+  select(-Functionality) %>%
+  as.data.frame()
+
+head(mydata)
+```
+
+
+Load the file containing the split functionality column (these columns are not used for this iteration but will be used subsequently).
+
+```{r load functionality file}
+functionality_df <- read.csv('data/functionality_split.csv', stringsAsFactors = FALSE)
+```
+
+Merge the mydata and functionality_df based on EmpCode.
+
+```{r merge mydata and functionality}
+mydata <- base::merge(mydata, functionality_df)
+```
+
+Split 70% of the data into the training set and 30% into the test set.
+
+```{r split into train and test}
+dat <- train_test_split(mydata, DepVar = 'DOL', Split = 0.7, seed = 1)
+train <- dat$train
+test <- dat$test
+
+X_train <- select(train, -DOL)
+Y_train <- select(train, DOL)
+
+X_test <- select(test, -DOL)
+Y_test <- select(test, DOL)
+
+rm(mydata, dat, train_test_split, functionality_df)
+```
+
+## Pre-process Training Set
+
+Remove the columns that are not used for this iteration and rename the Productivity% and Quality% columns.
+```{r remove useless columns}
+x_train <- X_train %>%
+  select(-Empcode, -Name, -rec_id, -NT_UserName, -UserId, -ExitInitiatedOn, -Absconding, -PrevCompanyName, -L1Supervisor, -L2Supervisor, -Designation, -HighestDegree, -Major, -Client)  %>%
+  rename(productivity = `Productivity%`, quality = `Quality%`)
+
+y_train <- Y_train
+```
+
+Convert DOJ (Date of Joining) and DOB (Date of Birth) to dates and find the age at joining in days.
+
+```{r age at joining}
+x_train$DOJ <- ymd(x_train$DOJ)
+x_train$DOB <- ymd(x_train$DOB)
+x_train$age_at_joining <- as.numeric(difftime(time1 = x_train$DOJ, time2 = x_train$DOB))
+```
+
+Fill NA values in Per_Pincode by values in Pre_Pincode.
+
+```{r fill NA Values in Per_Pincode}
+x_train$Per_Pincode[is.na(x_train$Per_Pincode)] <- x_train$Pre_Pincode[is.na(x_train$Per_Pincode)]
+```
+
+Create a new variable whether Pre_Pincode and Per_Pincode are same.
+
+```{r Pre_Pincode and Per_Pincode are the same}
+x_train$Pre_Pincode <- as.character(x_train$Pre_Pincode)
+x_train$Per_Pincode <- as.character(x_train$Per_Pincode)
+
+x_train <- x_train %>%
+  mutate(pin_code_diff = if_else(Pre_Pincode == Per_Pincode, 0, 1))
+```
+
+Remove the columns that are not needed now.
+
+```{r remove columns not needed}
+x_train <- x_train %>%
+  select(-DOJ, -DOB, -Pre_Pincode, -Per_Pincode, -MLAvailed)
+```
+
+Convert values for PrevCompExp less than 0 to 0 and log transform it after adding 1.
+
+```{r transfrom PrevCompExp}
+x_train$PrevCompanyExp[x_train$PrevCompanyExp < 0] <- 0
+x_train$PrevCompanyExp <- log(x_train$PrevCompanyExp + 1)
+```
+
+Create three new variables - whether both productivity and quality are NA, only productivity is NA or only quality is NA.
+
+```{r NAs in Productivity and Quality}
+x_train <- x_train %>%
+  mutate(prod_qual_both = if_else(is.na(productivity) & is.na(quality) | 
+                                    productivity == 0 & is.na(quality), 1, 0), 
+         prod_only = if_else(is.na(productivity) & !is.na(quality), 1, 0), 
+         qual_only = if_else(!is.na(productivity) & is.na(quality), 1, 0))
+```
+
+Replace NAs in productivity and quality by the median of the respective columns.
+
+```{r NAs in productivity and quality by median}
+median_productivity <- median(x_train$productivity, na.rm = TRUE)
+median_quality <- median(x_train$quality, na.rm = TRUE)
+
+x_train$productivity[is.na(x_train$productivity)] <- median_productivity
+x_train$quality[is.na(x_train$quality)] <- median_quality
+```
+
+Remove the functionality column since as stated earlier this will be used in the next iteration.
+
+```{r remove functionality}
+x_train <- x_train %>%
+  select(-main_func, -sub_func)
+```
+
+Create a new variable whether there are zero dependents.
+
+```{r zero dependent variable}
+x_train <- x_train %>%
+  mutate(dep_zero = ifelse(Dependents == 0, 1, 0)) %>%
+  select(-Dependents)
+```
+
+Take a look the final pre-processed train set.
+
+```{r head(x_train)}
+head(x_train)
+```
+
+
+## Pre-process Test Set
+
+Following a similar procedure to the train set, preprocess the test set.
+
+```{r preprocess test set}
+x_test <- X_test %>%
+  select(-Empcode, -Name, -rec_id, -NT_UserName, -UserId, -ExitInitiatedOn, -Absconding, -PrevCompanyName, -L1Supervisor, -L2Supervisor, -Designation, -HighestDegree, -Major, -Client)  %>%
+  rename(productivity = `Productivity%`, quality = `Quality%`)
+
+y_test <- Y_test
+
+x_test$DOJ <- ymd(x_test$DOJ)
+x_test$DOB <- ymd(x_test$DOB)
+x_test$age_at_joining <- as.numeric(difftime(time1 = x_test$DOJ, time2 = x_test$DOB))
+
+x_test$Per_Pincode[is.na(x_test$Per_Pincode)] <- x_test$Pre_Pincode[is.na(x_test$Per_Pincode)]
+
+x_test$Pre_Pincode <- as.character(x_test$Pre_Pincode)
+x_test$Per_Pincode <- as.character(x_test$Per_Pincode)
+x_test <- x_test %>%
+  mutate(pin_code_diff = if_else(Pre_Pincode == Per_Pincode, 0, 1))
+
+x_test <- x_test %>%
+  select(-DOJ, -DOB, -Pre_Pincode, -Per_Pincode, -MLAvailed)
+
+x_test$PrevCompanyExp[x_test$PrevCompanyExp < 0] <- 0
+x_test$PrevCompanyExp <- log(x_test$PrevCompanyExp + 1)
+
+x_test <- x_test %>%
+  mutate(prod_qual_both = if_else(is.na(productivity) & is.na(quality) | 
+                                    productivity == 0 & is.na(quality), 1, 0), 
+         prod_only = if_else(is.na(productivity) & !is.na(quality), 1, 0), 
+         qual_only = if_else(!is.na(productivity) & is.na(quality), 1, 0))
+
+x_test$productivity[is.na(x_test$productivity)] <- median_productivity
+x_test$quality[is.na(x_test$quality)] <- median_quality
+
+x_test <- x_test %>%
+  select(-main_func, -sub_func)
+
+x_test <- x_test %>%
+  mutate(dep_zero = ifelse(Dependents == 0, 1, 0)) %>%
+  select(-Dependents)
+```
+
+## Modeling
+
+### Logistic Regression
+
+```{r fit the model}
+glm.model <- glm(formula = DOL ~ ., 
+                 data = data.frame(x_train, y_train), 
+                 family = binomial(link = 'logit'))
+
+summary(glm.model)
+```
+
+
+```{r predict on test set}
+# predict on the test set
+pred_prob_test_glm <- predict(glm.model, newdata = x_test, type = 'response')
+pred_vals_test_glm <- as.factor(ifelse(pred_prob_test_glm >= 0.5, 1, 0))
+```
+
+Confusion Matrix.
+
+```{r confusion matrix}
+caret::confusionMatrix(pred_vals_test_glm, y_test$DOL, mode = 'prec_recall', positive = '1')
+```
+
+
+```{r AUC}
+roc(y_test$DOL, pred_prob_test_glm)$auc
+```
