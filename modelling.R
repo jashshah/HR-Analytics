@@ -2,32 +2,46 @@ source('fe_test.R')
 
 #### Logistic Regression ####
 
-glm.model <- glm(formula = DOL ~ ., 
+### Model with Variance and Rating ###
+
+glm.model <- glm(formula = quit ~ ., 
                  data = data.frame(x_train, y_train), 
                  family = binomial(link = 'logit'))
 
-summary(glm.model)
+summary(glm.model) # AIC: 668.58
 
 pred_prob_test_glm <- predict(glm.model, newdata = x_test, type = 'response')
 
 pred_vals_test_glm <- as.factor(ifelse(pred_prob_test_glm >= 0.5, 1, 0))
 
-caret::confusionMatrix(pred_vals_test_glm, y_test$DOL, mode = 'prec_recall', positive = '1')
+caret::confusionMatrix(pred_vals_test_glm, y_test$quit, mode = 'prec_recall', positive = '1')
 
-roc(y_test$DOL, pred_prob_test_glm)$auc
+# Accuracy: 0.9733
+# Precision: 0.9752
+# Recall: 0.9979
 
-#### Decision Trees ####
+roc(y_test$quit, pred_prob_test_glm)$auc # 0.8724
 
-dt.model <- rpart(formula = DOL ~ ., 
-                  data = data.frame(x_train, y_train))
+write.csv(summary(glm.model)$coefficients, 'model_with_variance_and_rating.csv')
 
-plot(dt.model)
-text(dt.model, pretty = TRUE)
+### Model with Variance and Rating ###
 
-pred_prob_test_dt <- predict(dt.model, newdata = x_test)[,2]
+glm.model <- glm(formula = quit ~ .-Rating -hike, 
+                 data = data.frame(x_train, y_train), 
+                 family = binomial(link = 'logit'))
 
-pred_vals_test_dt <- predict(dt.model, newdata = x_test, type = 'class')
+summary(glm.model) # AIC: 716.85
 
-caret::confusionMatrix(pred_vals_test_dt, y_test$DOL, mode = 'prec_recall', positive = '1')
+pred_prob_test_glm <- predict(glm.model, newdata = x_test, type = 'response')
 
-roc(y_test$DOL, pred_prob_test_dt)$auc
+pred_vals_test_glm <- as.factor(ifelse(pred_prob_test_glm >= 0.5, 1, 0))
+
+caret::confusionMatrix(pred_vals_test_glm, y_test$quit, mode = 'prec_recall', positive = '1')
+
+# Accuracy: 0.9733
+# Precision: 0.9752
+# Recall: 0.9979
+
+roc(y_test$quit, pred_prob_test_glm)$auc # 0.799
+
+write.csv(summary(glm.model)$coefficients, 'model_without_variance_and_rating.csv')

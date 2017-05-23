@@ -6,4 +6,5 @@ checkInstallLoad("caret")
 checkInstallLoad("pROC")
 checkInstallLoad("rpart")
 checkInstallLoad("corrplot")
+checkInstallLoad("dummies")
 

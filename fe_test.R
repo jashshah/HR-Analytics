@@ -2,8 +2,8 @@ source('data.R')
 source('fe_train.R')
 
 x_test <- X_test %>%
-  select(-Empcode, -Name, -rec_id, -NT_UserName, -UserId, -ExitInitiatedOn, -Absconding, -PrevCompanyName, -L1Supervisor, -L2Supervisor, -Designation, -HighestDegree, -Major, -Client)  %>%
-  rename(productivity = `Productivity%`, quality = `Quality%`)
+  select(-Empcode, -Name, -rec_id, -NT_UserName, -UserId, -DOL, ExitInitiatedOn, Absconding, -ExitInitiatedOn, -Absconding, -PrevCompanyName, -L1Supervisor, -L2Supervisor, -Designation, -HighestDegree, -Major, -Client)  %>%
+  rename(productivity = `Productivity%`, quality = `Quality%`, hike = `Variance %`)
 
 y_test <- Y_test
 
@@ -44,4 +44,6 @@ x_test <- x_test %>%
   mutate(dep_zero = ifelse(Dependents == 0, 1, 0)) %>%
   select(-Dependents)
 
-
+# x_test$Rating <- lookup_table[as.character(x_test$Rating)]
+# 
+# x_test <- dummy.data.frame(x_test, names = c('Gender', 'MaritalStatus', 'MultipleDegree', 'Shift', 'Rating'))

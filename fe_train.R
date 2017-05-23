@@ -1,8 +1,8 @@
 source('data.R')
 
 x_train <- X_train %>%
-  select(-Empcode, -Name, -rec_id, -NT_UserName, -UserId, -ExitInitiatedOn, -Absconding, -PrevCompanyName, -L1Supervisor, -L2Supervisor, -Designation, -HighestDegree, -Major, -Client)  %>%
-  rename(productivity = `Productivity%`, quality = `Quality%`)
+  select(-Empcode, -Name, -rec_id, -NT_UserName, -UserId, -DOL, -ExitInitiatedOn, -Absconding, -ExitInitiatedOn, -Absconding, -PrevCompanyName, -L1Supervisor, -L2Supervisor, -Designation, -HighestDegree, -Major, -Client)  %>%
+  rename(productivity = `Productivity%`, quality = `Quality%`, hike = `Variance %`)
 
 y_train <- Y_train
 
@@ -60,4 +60,9 @@ x_train <- x_train %>%
   mutate(dep_zero = ifelse(Dependents == 0, 1, 0)) %>%
   select(-Dependents)
 
-
+# lookup_table <- c('one', 'two', 'three', 'four', 'five', 'general')
+# names(lookup_table) <- c('1', '2', '3', '4', '5', 'General')
+# 
+# x_train$Rating <- lookup_table[as.character(x_train$Rating)]
+# 
+# x_train <- dummy.data.frame(x_train, names = c('Gender', 'MaritalStatus', 'MultipleDegree', 'Shift', 'Rating'))

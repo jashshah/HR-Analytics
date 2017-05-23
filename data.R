@@ -2,24 +2,31 @@ source('helper.R')
 source('libraries.R')
 
 mydata <- read_excel('data/HR Data.xlsx', na = "NA") %>%
-  mutate(DOL = as.factor(if_else(DOL == "No", "0", if_else(DOL == "Yes", "1", DOL)))) %>%
+  mutate(quit = as.factor(if_else(Absconding == "Resigned" | 
+                                          Absconding == "Absconding", "1", "0"))) %>%
   select(-Functionality) %>%
   as.data.frame()
 
 functionality_df <- read.csv('data/functionality_split.csv', stringsAsFactors = FALSE)
 
+variance_hike <- read_excel('data/MLPredictionTillMarch28_V1.xlsx') %>%
+  select(Empcode, Rating, `Variance %`)
+
 mydata <- base::merge(mydata, functionality_df)
+mydata <- base::merge(mydata, variance_hike)
 
-# prop.table(table(mydata$DOL, useNA = 'always')) # 30:70 split between Yes:No
+prop.table(table(mydata$quit, useNA = 'always')) # 30:70 split between Yes:No
 
-dat <- train_test_split(mydata, DepVar = 'DOL', Split = 0.7, seed = 1)
+mydata <- mydata %>% filter(!(is.na(Rating) & is.na(`Variance %`)))
+
+dat <- train_test_split(mydata, DepVar = 'quit', Split = 0.7, seed = 1)
 train <- dat$train
 test <- dat$test
 
-X_train <- select(train, -DOL)
-Y_train <- select(train, DOL)
+X_train <- select(train, -quit)
+Y_train <- select(train, quit)
 
-X_test <- select(test, -DOL)
-Y_test <- select(test, DOL)
+X_test <- select(test, -quit)
+Y_test <- select(test, quit)
 
-rm(mydata, dat, train_test_split, functionality_df)
+rm(mydata, dat, train_test_split, functionality_df, variance_hike)
