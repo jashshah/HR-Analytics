@@ -1,8 +1,6 @@
 source('helper.R')
 source('libraries.R')
 
-# Data from a company called Access Healthcare
-
 mydata <- read_excel('data/HR Data.xlsx', na = "NA") %>%
   mutate(DOL = as.factor(if_else(DOL == "No", "0", if_else(DOL == "Yes", "1", DOL)))) %>%
   select(-Functionality) %>%
