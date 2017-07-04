@@ -12,8 +12,8 @@ source('libraries.R')
 
 ```{r load the data}
 mydata <- read_excel('data/HR Data.xlsx', na = "NA") %>%
-  mutate(DOL = as.factor(if_else(DOL == "No", "0", 
-                                 if_else(DOL == "Yes", "1", DOL)))) %>%
+  mutate(quit = as.factor(if_else(Absconding == "Resigned" | 
+                                          Absconding == "Absconding", "1", "0"))) %>%
   select(-Functionality) %>%
   as.data.frame()
 
@@ -27,26 +27,42 @@ Load the file containing the split functionality column (these columns are not u
 functionality_df <- read.csv('data/functionality_split.csv', stringsAsFactors = FALSE)
 ```
 
-Merge the mydata and functionality_df based on EmpCode.
+Load the file containing the ratings and hike%
+
+```{r}
+variance_hike <- read_excel('data/MLPredictionTillMarch28_V1.xlsx') %>%
+  select(Empcode, Rating, `Variance %`)
+```
+
+
+Merge mydata, functionality_df and variance_hike based on EmpCode.
 
 ```{r merge mydata and functionality}
 mydata <- base::merge(mydata, functionality_df)
+mydata <- base::merge(mydata, variance_hike)
 ```
+
+Remove rows that contain NAs in Ratings and Hike%
+
+```{r}
+mydata <- mydata %>% filter(!(is.na(Rating) & is.na(`Variance %`)))
+```
+
 
 Split 70% of the data into the training set and 30% into the test set.
 
 ```{r split into train and test}
-dat <- train_test_split(mydata, DepVar = 'DOL', Split = 0.7, seed = 1)
+dat <- train_test_split(mydata, DepVar = 'quit', Split = 0.7, seed = 1)
 train <- dat$train
 test <- dat$test
 
-X_train <- select(train, -DOL)
-Y_train <- select(train, DOL)
+X_train <- select(train, -quit)
+Y_train <- select(train, quit)
 
-X_test <- select(test, -DOL)
-Y_test <- select(test, DOL)
+X_test <- select(test, -quit)
+Y_test <- select(test, quit)
 
-rm(mydata, dat, train_test_split, functionality_df)
+rm(mydata, dat, train_test_split, functionality_df, variance_hike)
 ```
 
 ## Pre-process Training Set
@@ -54,8 +70,8 @@ rm(mydata, dat, train_test_split, functionality_df)
 Remove the columns that are not used for this iteration and rename the Productivity% and Quality% columns.
 ```{r remove useless columns}
 x_train <- X_train %>%
-  select(-Empcode, -Name, -rec_id, -NT_UserName, -UserId, -ExitInitiatedOn, -Absconding, -PrevCompanyName, -L1Supervisor, -L2Supervisor, -Designation, -HighestDegree, -Major, -Client)  %>%
-  rename(productivity = `Productivity%`, quality = `Quality%`)
+  select(-Empcode, -Name, -rec_id, -NT_UserName, -UserId, -DOL, -ExitInitiatedOn, -Absconding, -ExitInitiatedOn, -Absconding, -PrevCompanyName, -L1Supervisor, -L2Supervisor, -Designation, -HighestDegree, -Major, -Client)  %>%
+  rename(productivity = `Productivity%`, quality = `Quality%`, hike = `Variance %`)
 
 y_train <- Y_train
 ```
@@ -146,8 +162,8 @@ Following a similar procedure to the train set, preprocess the test set.
 
 ```{r preprocess test set}
 x_test <- X_test %>%
-  select(-Empcode, -Name, -rec_id, -NT_UserName, -UserId, -ExitInitiatedOn, -Absconding, -PrevCompanyName, -L1Supervisor, -L2Supervisor, -Designation, -HighestDegree, -Major, -Client)  %>%
-  rename(productivity = `Productivity%`, quality = `Quality%`)
+  select(-Empcode, -Name, -rec_id, -NT_UserName, -UserId, -DOL, ExitInitiatedOn, Absconding, -ExitInitiatedOn, -Absconding, -PrevCompanyName, -L1Supervisor, -L2Supervisor, -Designation, -HighestDegree, -Major, -Client)  %>%
+  rename(productivity = `Productivity%`, quality = `Quality%`, hike = `Variance %`)
 
 y_test <- Y_test
 
@@ -189,8 +205,10 @@ x_test <- x_test %>%
 
 ### Logistic Regression
 
+#### Model With Variance and Rating 
+
 ```{r fit the model}
-glm.model <- glm(formula = DOL ~ ., 
+glm.model <- glm(formula = quit ~ ., 
                  data = data.frame(x_train, y_train), 
                  family = binomial(link = 'logit'))
 
@@ -207,10 +225,37 @@ pred_vals_test_glm <- as.factor(ifelse(pred_prob_test_glm >= 0.5, 1, 0))
 Confusion Matrix.
 
 ```{r confusion matrix}
-caret::confusionMatrix(pred_vals_test_glm, y_test$DOL, mode = 'prec_recall', positive = '1')
+caret::confusionMatrix(pred_vals_test_glm, y_test$quit, mode = 'prec_recall', positive = '1')
 ```
 
 
 ```{r AUC}
-roc(y_test$DOL, pred_prob_test_glm)$auc
+roc(y_test$quit, pred_prob_test_glm)$auc
+```
+
+#### Model without Variance and Rating
+
+```{r}
+glm.model <- glm(formula = quit ~ .-Rating -hike, 
+                 data = data.frame(x_train, y_train), 
+                 family = binomial(link = 'logit'))
+
+summary(glm.model)
+```
+
+```{r}
+# predict on the test set
+pred_prob_test_glm <- predict(glm.model, newdata = x_test, type = 'response')
+pred_vals_test_glm <- as.factor(ifelse(pred_prob_test_glm >= 0.5, 1, 0))
+```
+
+Confusion Matrix.
+
+```{r}
+caret::confusionMatrix(pred_vals_test_glm, y_test$quit, mode = 'prec_recall', positive = '1')
+```
+
+
+```{r}
+roc(y_test$quit, pred_prob_test_glm)$auc
 ```
